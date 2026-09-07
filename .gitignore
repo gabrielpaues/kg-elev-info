@@ -1,0 +1,8 @@
+chrome-profile/
+raw/*.json
+rapporter/
+data/elev.local
+data/mottagare.local
+data/kalender-events.json
+data/last-delad-lank.txt
+.DS_Store
