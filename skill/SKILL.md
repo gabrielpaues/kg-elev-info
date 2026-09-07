@@ -135,10 +135,10 @@ Startsidan listar `div.menu-card` (Barnomsorgsansökan, Familjeförhållanden, R
 ## 6. Hämta publika terminsdatum + konserter
 
 ```zsh
-curl -sL https://kungsholmensgymnasium.stockholm/viktiga-datum-under-lasaret/ | sed -n '/Höstterminen/,/Uppdaterad/p'
+python3 ~/github/kg-elev-info/skill/scripts/hamta-lasaret.py ~/github/kg-elev-info/data/lasaret-datum.md
 ```
 
-Uppdatera `~/github/kg-elev-info/data/lasaret-datum.md` om sidan ändrats.
+Skriptet hämtar ALLA terminssektioner strukturellt ((Höst|Vår)terminen ÅÅÅÅ) — robust när skolan byter läsår eller plockar bort höstterminen. Tidigare sed-kommando på rå HTML brast på båda punkterna (tag-soppa + försvunnen höstterminssektion → tomt resultat). Kör ALLTID scriptet, aldrig sed på HTML.
 
 **Konserter** (Kungsholmens är också Stockholms musikgymnasium — eleven deltar i körkonserter):
 

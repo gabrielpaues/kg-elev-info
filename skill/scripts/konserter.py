@@ -23,8 +23,9 @@ src = [a for a in args if not a.startswith("--") and a not in (klass_arg, str(ak
 if src:
     raw = open(src[0], encoding="utf-8", errors="ignore").read()
 else:
-    req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
-    raw = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", errors="ignore")
+    import subprocess
+    raw = subprocess.run(["curl", "-sL", "--max-time", "30", "-A", "Mozilla/5.0", URL],
+                         capture_output=True, text=True, timeout=45).stdout
 
 raw = re.sub(r"<script.*?</script>", "", raw, flags=re.S)
 raw = re.sub(r"<style.*?</style>", "", raw, flags=re.S)

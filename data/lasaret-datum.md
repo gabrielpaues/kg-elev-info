@@ -1,22 +1,21 @@
-# Kungsholmens gymnasium — viktiga datum läsåret 2026/2027
-
+# Kungsholmens gymnasium — viktiga datum
 Källa: https://kungsholmensgymnasium.stockholm/viktiga-datum-under-lasaret/
-Hämtad: 2026-09-06. Uppdateras automatiskt av skill vid varje körning (curl → parsar sektionen nedan).
+Hämtad: 2026-09-07 (uppdateras automatiskt av skillen vid varje körning)
 
 ## Höstterminen 2026
-- 2026-08-18 — Läsårsstart årskurs 1 och IMS
-- 2026-08-20 — Läsårsstart årskurs 2 och 3
-- 2026-10-26 till 2026-10-30 — Höstlov (vecka 44)
-- 2026-12-18 — Höstterminens sista dag
+- Läsårsstart årskurs 1 och IMS: 18 augusti 2026
+- Läsårsstart årskurs 2 och 3: 20 augusti 2026
+- Höstlov, vecka 44: 26–30 oktober
+- Höstterminens sista dag: 18 december.
 
 ## Vårterminen 2027
-- 2027-01-11 — Vårterminens första dag
-- 2027-03-01 till 2027-03-05 — Sportlov (vecka 9)
-- 2027-03-30 till 2027-04-02 — Påsklov (30–31 mars, 1–2 april, vecka 13)
-- 2027-05-07 — Lov vid Kristi himmelsfärds dag
-- 2027-06-08 — Studentutspring årskurs 3
-- 2027-06-11 — Skolavslutning (årskurs 1, 2, 3)
+- Vårterminens första dag: 11 januari
+- Sportlov, vecka 9: 1–5 mars
+- Påsklov, vecka 13: 30–31 mars och 1–2 april
+- Lov vid Kristi himmelsfärds dag: 7 maj
+- Studentutspring för elever i årskurs 3: 8 juni
+- Skolavslutning för elever i årskurs 1, 2 och 3: 11 juni.
 
-## Kontakter
-- Support elever: 020-33 09 00, elevsupport@edu.stockholm.se ( alla dagar 07–22)
+## Kontakter (från skolans e-tjänstesida)
+- Support elever: 020-33 09 00, elevsupport@edu.stockholm.se (alla dagar 07–22)
 - Support vårdnadshavare: 08-508 11 552, support.vardnadshavare@stockholm.se (mån–tor 08–16.30, fre 08–16)
