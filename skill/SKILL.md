@@ -9,7 +9,7 @@ description: |
   kommande veckor/termin. Personspecifik konfiguration (namn, klass, kammarkör, mottagare)
   läses från data/elev.local (gitignored) och frågas efter vid första körningen. Trigga på:
   veckorapport skola, skolan den här veckan, vad händer i skolan, barnets skola,
-  Kungsholmens gymnasium, kg-elev-info.
+  Kungsholmens gymnasium, skola-veckorapport, kg-elev-info.
 ---
 
 # Skola Veckorapport
@@ -62,7 +62,7 @@ node $C new "https://education.service.tieto.com/WE.Education.Spaces/Start?Actor
 node $C list
 ```
 
-Loggas redan in (sessioner lever) → hoppa till steg 4.
+Redan inloggad (sessionerna lever) → hoppa till steg 4.
 
 ## 4. Vänta på BankID-inloggning
 
@@ -76,15 +76,15 @@ node $C eval <infomentor-idx> ~/github/kg-elev-info/skill/scripts/recon.mjs
 
 **⚠️ Kalibreringslektion 2026-09-06:**
 - Kör bara **en SAML-inloggning i taget**. Tre parallella flöden i samma Siteminder-session → assertionen expirerar → `HTTP 400 Bad Request` på `saml2sso?SMASSERTIONREF=QUERY`. Åtgärd: navigera om tabben till service-URL:en — ofta lever SMSESSION-kakan kvar och inloggningen sker utan nytt BankID.
-- Skola24 kan svara 500 vid blind re-spel av API:er (saknade params) — kör bara sidans egna UI-flöden.
+- Skola24 kan svara 500 vid blinda API-anrop utan rätt parametrar — kör bara sidans egna UI-flöden.
 
 ## 5. Skrapa alla tre (kalibrerade recept 2026-09-06)
 
-Spara rå JSON per system i `~/github/kg-elev-info/raw/YYYY-MM-DD-<system>.json>`. Råtext är sanningens källa — inget i rapporten får komma från annat än dessa data + terminsdatum.
+Spara rå JSON per system i `~/github/kg-elev-info/raw/YYYY-MM-DD-<system>.json`. Råtext är sanningens källa — inget i rapporten får komma från annat än dessa data + terminsdatum.
 
-Cdp-kommandon: `list | new <url> | navigate <idx> <url> | eval <idx> <fil.js> | click <idx> <css-sel> | net <idx> <sek> | close <idx>`. `eval`-filer får vara fristående (top-nivå `return` omsluts av `(async()=>{...})()`); `await` och `setTimeout` är OK. **JS-klick fungerar inte i Infomentor/KO — använd `click` (trusted CDP-input) eller `element.closest('a.tile').click()` via JS.**
+cdp-kommandon: `list | new <url> | navigate <idx> <url> | eval <idx> <fil.js> | click <idx> <css-sel> | net <idx> <sek> | close <idx>`. `eval`-filer får vara fristående (top-nivå `return` omsluts av `(async()=>{...})()`); `await` och `setTimeout` är OK. **JS-klick fungerar inte i Infomentor/KO — använd `click` (trusted CDP-input) eller `element.closest('a.tile').click()` via JS.**
 
-### 4a. Infomentor (hub.infomentor.se, Knockout-SPA)
+### 5a. Infomentor (hub.infomentor.se, Knockout-SPA)
 
 Direkta hash-ruter (navigera med `$C navigate <idx> "https://hub.infomentor.se/#/communication/news"`):
 
@@ -98,11 +98,11 @@ Direkta hash-ruter (navigera med `$C navigate <idx> "https://hub.infomentor.se/#
 
 Kalender: sub-app med egen router. Navigera `#/`, JS: `document.querySelector('#calendarv2').closest('a.tile').click()`, vänta 4 s, landar på `#/calendarv2/whole_week`. Loopa veckor: `aria-label="Nästa vecka"`-knapp, 2,5 s per vecka. Klipp text: från `Vecka NN` till `NOTISER`. Innehåll: skoldagstyper (Gul heldag/eftermiddag/förmiddag med tider = avvikande skoldag!), prov/inlämningar (Examinationsschema), temadagar, elevhälsa.
 
-Guld i kalendern: raden "Gul heldag"/"Gul eftermiddag" betyder förkortad/avvikande skoldag → both schema-avvikelse och praktisk planering.
+Guld i kalendern: raden "Gul heldag"/"Gul eftermiddag" betyder förkortad/avvikande skoldag → både schema-avvikelse och praktisk planering.
 
 Mötesbokning (`#/meeting`): kan behövas för utvecklingssamtal — kolla om öppna bokningsfönster finns; om texten visar aktiva perioder, rapportera under Åtgärda.
 
-### 4b. Skola24 (websthlm.skola24.se)
+### 5b. Skola24 (websthlm.skola24.se)
 
 | URL | Innehåll |
 |-----|----------|
@@ -116,7 +116,7 @@ Schema-recept:
 3. Klicka vecka: `[...document.querySelectorAll('a')].find(a => a.innerText.trim().startsWith('v.38 '))`, 3 s.
 4. Klipp: från `'Visa schema för'` till `'Senast publicerad'` i `document.body.innerText`. Sista raden = senaste publiceringstid (rapportera den!).
 
-Schema-texten innehåller: dagar (Måndag 7/9 …), lektioner (kurskod, lärarinitialer, rumsnr) och specialraderna under veckan: "10/9, 9:00-12:00 Friluftsdag", "Studiedag", "9/9, 12:30-17:00 Studieeftermiddag" — dessa är guld, korsrefer­era med Infomentor-kalendern.
+Schema-texten innehåller: dagar (Måndag 7/9 …), lektioner (kurskod, lärarinitialer, rumsnr) och specialraderna under veckan: "10/9, 9:00-12:00 Friluftsdag", "Studiedag", "9/9, 12:30-17:00 Studieeftermiddag" — dessa är guld, korsreferera med Infomentor-kalendern.
 
 **Strukturerad parsing per dag (krav för start/sluttider + idrottsdagar):**
 
@@ -126,9 +126,9 @@ python3 ~/github/kg-elev-info/skill/scripts/skola24-schema-dagar.py ~/github/kg-
 
 - Ger per dag: datum, start (första lektion), slut (sista lektion), lektioner med kurs/tid/sal/lärare, händelser, `idrott`-flagga (IDRO-kod).
 - Validering inbyggd: dagarna splittas via tidsminskning i tidflödet + krav att lektionsantal == tidpar per dag. Returnerar `fel` → rapportera dagen som "fördelning osäker" — hitta ALDRIG på fördelning.
-- Empiriskt stabil på v37–v40 2026-09-06. Om Skola24 ändrar rendering: kör recon + kalibrera (se §10). Live-DOM-extraktion per dagkolumn är den robusta uppgraderingen om flat-parsningen briserar.
+- Empiriskt stabil på v37–v40 2026-09-06. Om Skola24 ändrar rendering: kör recon + kalibrera (se §10). Live-DOM-extraktion per dagkolumn är den robusta uppgraderingen om flat-parsningen slutar fungera.
 
-### 4c. Edlevo (education.service.tieto.com)
+### 5c. Edlevo (education.service.tieto.com)
 
 Startsidan listar `div.menu-card` (Barnomsorgsansökan, Familjeförhållanden, Registrera inkomst, Studieplan …). Studieplan: JS-klick på card med texten "Studieplan" → ny sida `USStudyPlanGuardian?childId=...` med tabeller: Planerade / Pågående / Avslutade + Studieplansanteckningar. Dumpa hela (kurser med poäng, perioder, betyg). Betyg spelar roll först vid avslutade kurser; pågående = läsårets plan. Kolla inför utvecklingssamtal.
 
@@ -147,7 +147,7 @@ python3 ~/github/kg-elev-info/skill/scripts/konserter.py --klass <KLASS>
 ```
 
 - `KLASS` läses från `data/elev.local`. Om den är tom: hitta klasskoden i Infomentor-kalendern (t.ex. "XxNNxx LÄRARE inlämning" / "Sv1 XXNNXX Prov") — mönstret `\b[NS][a-z]\d{2}[a-z]{2}\b`, välj den som återkommer i elevens poster. Årskurs härleds ur koden (NN = antagningsår); verifiera mot Edlevo-kurslistan (enstaka Nivå 1-kurser = åk 1) och skriv in i elev.local.
-- Filtreringen matchar: (a) klasskoden utskriven bland medverkande, (b) "hela årskurs N", (c) hela skolan — MEN BARA om ingen specifik grupp (annan klass/årskurs) nämns (bug: "Årskurs 3 från skolan" matchade felaktigt "hela skolan" tidigare).
+- Filtreringen matchar: (a) klasskoden utskriven bland medverkande, (b) "hela årskurs N", (c) hela skolan — MEN BARA om ingen specifik grupp (annan klass/årskurs) nämns (tidigare bugg: "Årskurs 3 från skolan" matchade felaktigt "hela skolan").
 - Kammarkören är separat antagen — anta ALDRIG att eleven sjunger där. `KAMMARKOR=true/false` i elev.local styr: false → exkludera kammarkörens konserter utan vidare kontroll; true → inkludera dem. Saknas värdet → fråga användaren en gång och skriv in det.
 - Konsertbiljetter med datum för biljettsläpp → går under "Åtgärda i förväg" om släppet ligger inom rapportperioden, annars under "Framåt".
 
@@ -191,10 +191,10 @@ Vecka [WW], [mån dd]–[sön dd]. Sammanställd [YYYY-MM-DD].
 ```
 
 **Regler:**
-- Att-göra-ägare:rapporten vänder sig till användaren (vårdnadshavare) — formulera åtgärder som "bolja utvecklingssamtal", inte "kontakta mentorn" utan anledning.
+- Rapporten vänder sig till vårdnadshavaren — formulera åtgärder som "boka utvecklingssamtal", inte "kontakta mentorn" utan anledning.
 - Veckodag ALLTID programmatiskt från datum (`date -j -f "%Y-%m-%d" ... +%A` eller python). Aldrig härledas från minne.
 - Osäker tolkning av raw-text → lista under "Framåt" med källcitat, aldrig som säker händelse med falsk precision.
-- Ifylld frånvaro/betyg som verkar gammalt → inte i veckas sektioner; Checka datum i texten.
+- Frånvaro/betyg som verkar gamla → inte i veckans sektioner; kontrollera datum i texten.
 - Tomma sektioner får aldrig hoppas över.
 - Skrivregler enligt AGENTS.md (ingen inflation, inga påhittade datum, neutral ton).
 - Avsluta svaret till användaren med rapportens sökväg + de 3 viktigaste raderna, inte hela rapporten i chatten.
@@ -203,7 +203,7 @@ Vecka [WW], [mån dd]–[sön dd]. Sammanställd [YYYY-MM-DD].
 
 **Kalendern (namn från `KALENDER_NAMN` i elev.local) MÅSTE ligga under iCloud-kontot.** AppleScript exponerar inte konton och `make new calendar` landar i default-kontot (oftast On My Mac) — skapa därför kalendern engångsvis manuellt: Cal.app → högerklicka **iCloud-rubriken** i sidofältet → Ny kalender → namnet från KALENDER_NAMN. Skriptet fyller däremot events via AppleScript obehindrat (osascript har egen behörighet; EventKit-via-Swift nekades TCC i denna miljö, försök ej igen).
 
-Efter rapporten: bygg `~/github/kg-elev-info/data/kalender-events.json` av rapportens daterade poster (Viktigt kommande vecka, Schema-avvikelser, Framåt — provisioner, avvikelser, prov, inlämningar, lov). Syntax:
+Efter rapporten: bygg `~/github/kg-elev-info/data/kalender-events.json` av rapportens daterade poster (Viktigt kommande vecka, Schema-avvikelser, Framåt — prov, inlämningar, avvikande dagar, lov). Syntax:
 
 ```json
 { "events": [
@@ -217,7 +217,7 @@ node ~/github/kg-elev-info/skill/scripts/calendar-sync.mjs ~/github/kg-elev-info
 ```
 
 - Kalender: namnet kommer från `KALENDER_NAMN` i elev.local (scriptet skapar den om den saknas — kontrollera då att den hamnar i iCloud, inte On My Mac). Idempotent — varje körning skapar bara nya poster (dup-check på summary + start date), raderar aldrig.
-- Håltdagar utan känd tid: `allday: true`; lö och lov: `endDate`.
+- Heldagar utan känd tid: `allday: true`; flerdagarshändelser (lov): `endDate`.
 - Endast daterade saker → kalendern. Vaga uppgifter ("kolla mentorns info") hamnar bara i rapporten.
 - Delning med elevens/familjens Apple ID: görs endast manuellt i Cal.app (delningsknapp) — kan ej skriptas.
 
@@ -229,7 +229,7 @@ Efter rapporten + kalendersync (§8):
 ~/github/kg-elev-info/skill/scripts/share-report.sh ~/github/kg-elev-info/rapporter/<rapport>.md
 ```
 
-Flödet: MD → stilad HTML (`md2html.py`) → PDF (debug-Chrome, `cdp.mjs pdf`) → Dropbox `Skola-Rapporter/rapport-senaste.pdf` (mode=overwrite → **länken är beständig mellan veckor**) → delbar länk → skrivs till `data/last-delad-lank.txt` + stdout (direktläsning `dl.dropboxusercontent.com` också). Arkiv läggs per vecka i `Skola-Rapporter/arkiv/`.
+Flödet: MD → stilad HTML (`md2html.py`) → PDF (debug-Chrome, `cdp.mjs pdf`) → Dropbox `Skola-Rapporter/rapport-senaste.pdf` (mode=overwrite → **länken är beständig mellan veckor**) → delbar länk → skrivs till `data/last-delad-lank.txt` + stdout (direktlänk `dl.dropboxusercontent.com` också). Arkiv läggs per vecka i `Skola-Rapporter/arkiv/`.
 
 Länken skickas sedan:
 
@@ -240,22 +240,22 @@ Länken skickas sedan:
 - Mottagare: rad `MOTTAGARE=<telefonnummer eller Apple-ID>[,<nr2>...]` i elev.local (gitignored) — kommaseparerad lista. Alla får samma text.
 - **Använd Dropbox-länkvarianten `?dl=0` (www.dropbox.com) i meddelandet** — renderas som snygg PDF-preview i webbläsaren/appen.
 - Delningssteget misslyckas → rapportera fel, fortsätt med övriga steg; rapporten är redan på disk.
-- Dropbox-token: keychain-post `skola-dropbox` (se utskrift-guider i share-report.sh vid fel). Ge ALDRIG ut token rumsligt — bara via keychain.
+- Dropbox-token: keychain-post `skola-dropbox` (se utskrift-guider i share-report.sh vid fel). Exponera aldrig token — endast via keychain.
 
-## 10. Kalibrering ( när skrapet ser fel)
+## 10. Kalibrering (när skrapet ser fel)
 
 `harvest.mjs` är generisk fallback. Systemen är SPA-appar — vid ändrade UI:er:
 
 1. Kör `recon.mjs` i tabben → läs `nav` (menylänkar) och `text`.
 2. Använd `net <idx> 15` medan du klickar på UI:n för att upptäcka XHR/JSON API:er — överväg att anropa dem in-page (`fetch` kör med cookies) i stället för att peta i DOM.
-   - **Spärr på retrier**: blinda API-anrop utan korrekta parametrar ger 500 (Skola24). Fånga ALLTID payload via `window.fetch`-hook i sidan och replaya aldrig blint.
+   - **Blinda API-anrop** utan korrekta parametrar ger 500 (Skola24). Fånga alltid payload via `window.fetch`-hook i sidan — anropa aldrig blint.
 3. Specialanpassa recepten i §5, kalendersync i §8 och delningen i §9 och notera ändringen i footer nedan.
-4. Knockout-klick: native `el.click()` når ofta KO-bindningar ändå (se im2-information som fungerade); annars `cdp.mjs click` (trusted input) eller navigera hash direkt: `#/<id från tile>`.
+4. Knockout-klick: native `el.click()` når ofta KO-bindningar ändå; annars `cdp.mjs click` (trusted input) eller navigera hash direkt: `#/<id från tile>`.
 
 ## 11. Frivillig schemaläggning
 
-launchd/cron går inte automatiskt (BankID kräver människa). Föreslå låst rutin: måndag 07.30 kör användaren skillen när kaffet bryggs.
+launchd/cron går inte automatiskt (BankID kräver människa). Föreslå fast rutin: måndag 07.30 kör användaren skillen när kaffet bryggs.
 
 ---
 
-*Skapad: 2026-09-06. Live-kalibrerad 2026-09-06: cdp.mjs (eval/navigate/net/click, exit-bugg fixad), skola24-schema via UI-veckoväxlare (v.37–40 insamlade), infomentor rutter + kalendersub-app (`#calendarv2`), edlevo studieplan via menu-card, kalendersync via AppleScript mot iCloud-kalender (namn från elev.local; kalendern skapas manuellt under iCloud-rubriken eftersom make-new-calendar landar i On My Mac; EventKit-Swift plockades bort pga TCC-nekande för bare swift-process). Repot flyttat till `~/github/kg-elev-info` (privat GitHub-profil gabrielpaues); skillen är symlinkad från config-katalogen. Kända luckor: Skola24 ledighetsansöknings-accordion expanderas ej via JS-klick (kräver trusted click), Infomentor mötesbokning ej än kartlagd. Skola24-schema + infomentor-kalender korsrefereras i rapporten (avvikande skoldagar i båda).*
+*Skapad: 2026-09-06. Live-kalibrerad 2026-09-06: cdp.mjs (eval/navigate/net/click, exit-bugg fixad), skola24-schema via UI-veckoväxlare (v.37–40 insamlade), infomentor rutter + kalendersub-app (`#calendarv2`), edlevo studieplan via menu-card, kalendersync via AppleScript mot iCloud-kalender (namn från elev.local; kalendern skapas manuellt under iCloud-rubriken eftersom make-new-calendar landar i On My Mac; EventKit-Swift plockades bort pga TCC-nekande för barr swift-process). Repot: `~/github/kg-elev-info` (publikt, github.com/gabrielpaues/kg-elev-info); skillen är symlinkad från opencode-configen. Kända luckor: Skola24:s ledighetsansöknings-accordion expanderas ej via JS-klick (kräver trusted click), Infomentors mötesbokning ej kartlagd än. Skola24-schema + infomentor-kalender korsrefereras i rapporten (avvikande skoldagar i båda).*

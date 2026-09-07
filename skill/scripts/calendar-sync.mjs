@@ -7,7 +7,7 @@
 //
 // events.json: { "events": [ { "date": "2026-09-10", "time": "09:00", "endTime": "12:00",
 //                              "title": "Friluftsdag åk 1", "desc": "Källa: Skola24 v37" } ... ] }
-// time/endTime valfria (heldagsexempel: "07:00"–"22:00" markeras ej — anges direkt).
+// time/endTime valfria — utelämnas de sätts händelsen som heldag respektive 1 timme.
 
 import fs from 'node:fs';
 
