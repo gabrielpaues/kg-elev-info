@@ -172,7 +172,7 @@ Vecka [WW], [mån dd]–[sön dd]. Sammanställd [YYYY-MM-DD].
 
 ## Särskilt att ha med
 - [dag dd/mm] [vad] — [anledning]
-[IDRO-dagar → ALLTID gymnastikkläder här, även veckor utan andra avvikelser — syftet är att hon ska komma ihåg att tvätta/packa]
+[IDRO-dagar → ALLTID gymnastikkläder här, även veckor utan andra avvikelser — syftet är att hen ska komma ihåg att tvätta/packa]
 [inget: "Inga dagar med särskilda saker denna vecka"]
 
 ## Schema vid avvikelse
