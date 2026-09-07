@@ -2,7 +2,7 @@
 # Delar veckorapporten: MD → HTML → PDF (debug-Chrome) → Dropbox (beständig delbar länk).
 #   share-report.sh <rapport.md> [utfil-länk.txt]
 # Kräver:
-#   - Dropbox-app-token i nyckelringen:  security add-generic-password -a gabrielpaues -s skola-dropbox -w <TOKEN>
+#   - Dropbox-app-token i nyckelringen:  security add-generic-password -a $USER -s skola-dropbox -w <TOKEN>
 #     (dropbox.com/developers/apps → Create app, scoped: files.content.write + sharing.write)
 #   - Debug-Chrome på :9222 (starta med skillens start-chrome.sh om ej körs)
 
