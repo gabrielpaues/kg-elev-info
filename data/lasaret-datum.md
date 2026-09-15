@@ -1,6 +1,6 @@
 # Kungsholmens gymnasium — viktiga datum
 Källa: https://kungsholmensgymnasium.stockholm/viktiga-datum-under-lasaret/
-Hämtad: 2026-09-07 (uppdateras automatiskt av skillen vid varje körning)
+Hämtad: 2026-09-15 (uppdateras automatiskt av skillen vid varje körning)
 
 ## Höstterminen 2026
 - Läsårsstart årskurs 1 och IMS: 18 augusti 2026
