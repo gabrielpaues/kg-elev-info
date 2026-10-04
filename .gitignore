@@ -1,10 +1,8 @@
+# Kördata — personuppgifter och regenererbara körprodukter ska aldrig in i git.
+# data/ innehåller elevkonfig (elev.local), kalenderdumpar, delningslänkar m.m.
 chrome-profile/
-raw/*.json
+raw/
 rapporter/
-data/elev.local
-data/mottagare.local
-data/kalender-events.json
-data/last-delad-lank.txt
+data/*
+!data/.gitkeep
 .DS_Store
-data/kal-dump.json
-data/kalender-*.json
