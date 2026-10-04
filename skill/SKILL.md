@@ -54,11 +54,17 @@ Port 9222. Isolerad profil → inloggningar finns kvar mellan körningar (kan kr
 
 ## 3. Öppna tabbar
 
+**Befintliga tabbar återanvänds — öppna aldrig dubbletter.** Kör `node $C list` först. Alla tre systemen delar samma Siteminder-SSO: har någon session levt kvar kan en sluten tab återställas med omnavigering till service-URL:en (SMSESSION-kakan gäller fortfarande) utan nytt BankID. `new` startar en NY SAML-transaction — blir assertionen stale först av den → `HTTP 400 Bad Request` (se kalibreringslektionen i §4). Öppna bara `new` för system utan tab, och låt vid inloggning bara ETT SAML-flöde åt gången köras.
+
 ```zsh
 C=~/github/kg-elev-info/skill/scripts/cdp.mjs
+node $C list
+# Tab saknas → öppna:
 node $C new "https://sso.infomentor.se/login.ashx?idp=stockholm_par"
 node $C new "https://stockholm.skola24.se"
 node $C new "https://education.service.tieto.com/WE.Education.Spaces/Start?Actor=Actor_Relative&idpMethod=SAML&domain=StockholmEdu"
+# Tab finns men gammal/fel → OMnavigera (återanvänder sessionen):
+node $C navigate <idx> "https://stockholm.skola24.se"
 node $C list
 ```
 
@@ -317,3 +323,4 @@ launchd/cron går inte automatiskt (BankID kräver människa). Föreslå fast ru
 *Skapad: 2026-09-06. Live-kalibrerad 2026-09-06: cdp.mjs (eval/navigate/net/click, exit-bugg fixad), skola24-schema via UI-veckoväxlare (v.37–40 insamlade), infomentor rutter + kalendersub-app (`#calendarv2`), edlevo studieplan via menu-card, kalendersync via AppleScript mot iCloud-kalender (namn från elev.local; kalendern skapas manuellt under iCloud-rubriken eftersom make-new-calendar landar i On My Mac; EventKit-Swift plockades bort pga TCC-nekande för barr swift-process). Repot: `~/github/kg-elev-info` (publikt, github.com/gabrielpaues/kg-elev-info); skillen är symlinkad från opencode-configen. Kända luckor: Skola24:s ledighetsansöknings-accordion expanderas ej via JS-klick (kräver trusted click). Skola24-schema + infomentor-kalender korsrefereras i rapporten (avvikande skoldagar i båda).
 Live-kalibrerad 2026-09-15 (v38–v44): (a) Infomentor-nyheter läses ur KO-VM (`ko.contextFor(el).$data` på `div[class*="__news-item__"] button.item-card`) — varken JS- eller trusted klick öppnar nyhetsdialogen; (b) kalenderrouten heter nu `#/communication/whole_week` (var `#/calendarv2/whole_week`); (c) skola24-schema-dagar.py kräver EN raw-fil med `weeks`-dict (en fil per vecka brast med "färre än 5 daghuvuden"); nutata: dict `v.NN` → `dagar[]`; (d) körklasser-evenemang ("ALLA körklasser") gäller eleven vid KORS1000X i schema/studieplan oavsett KAMMARKOR=false — kammarkören förblir separat; (e) halvveckorapport: körs skillen mån–fre läggs sektionen "I veckan som går (kvarvarande vN)" in ovanför Viktigt och dess poster kalendersyncas; (f) evals hålls korta (~10 s) — långa klicksekvenser tappar resultat mot shell-timeout; (g) mötesbokning kartlagd: `#/meeting` → "Du har inga bokade möten"/bokade möten. SAML-400-åtgärden (om navigering till service-URL) bekräftad fungerande utan nytt BankID. Parsern på nytt stabil v38–v40.
 2026-09-15 kalendersync: calendar-sync.mjs fick lägena dump / apply-updates / remove — exakt dup-koll (summary + start) missar händelser som byter titel när mer info kommer (10 dubblettpar efter två körningar); matchmaking görs av AI mot en skriptfördumpad kalender, radering alltid efter användargodkänd uid-lista (skill §8 steg 2 och 4). AppleScript-isot-coercion (`«class isot» as text`) fungerar ej — datum formateras i scriptet (pad/iso-handlers; `number & text` ger mellanslag, coercera `as text` explicit). `whose … ≥ current date` mot iCloud är trögt (1–3 min); timeout 300 s. remove-läget har träffat stale-referenskrasch vid delete i materialiserad whose-lista — därför nytt uid-uppslag per rad + try-vakt, och "UID SAKNAS" = posten redan borta (ofarligt). Övning: en avbruten AppleScript-raderingskörning kan ha raderat MER än rapporterats — dumpa alltid på nytt och verifiera verkligt läge före upprepning.*
+Live-kalibrerad 2026-10-04: tab-hantering i §3 ordnad — kolla list först, återanvänd/navigera om befintliga tabbar, öppna aldrig dubbletter; ett SAML-flöde åt gången. Skola24-tab fastnad i SAML-400 återloggades via omnavigering till stockholm.skola24.se utan nytt BankID (SMSESSION-kakan levde kvar). Edlevo: första laddningen efter tab-öppning misslyckas ofta (stale assertion/transaction) men omnavigering landar i inloggad startsida — samma recept; betrakta felet som transient, re-navigera i stället för att öppna ny tab (användare: "felskapar men funkar ändå").*

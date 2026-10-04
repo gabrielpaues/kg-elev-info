@@ -6,3 +6,5 @@ data/mottagare.local
 data/kalender-events.json
 data/last-delad-lank.txt
 .DS_Store
+data/kal-dump.json
+data/kalender-*.json

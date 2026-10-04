@@ -69,12 +69,17 @@ const prolog = [
   '  set cal to item 1 of cals',
 ];
 
-const run = (lines) => {
+const run = (lines, keepTmp = false) => {
   const f = fs.mkdtempSync('/tmp/kalsync-') + '/kal.applescript';
   fs.writeFileSync(f, lines.join('\n'));
-  const out = execFileSync('osascript', [f], { encoding: 'utf8', timeout: 300000 });
-  if (out.startsWith('SAKNAS')) { console.error(out); process.exit(1); }
-  return out;
+  try {
+    const out = execFileSync('osascript', [f], { encoding: 'utf8', timeout: 300000 });
+    if (out.startsWith('SAKNAS')) { console.error(out); process.exit(1); }
+    return out;
+  } catch (e) {
+    console.error('skript sparad för felsökning:', f);
+    throw e;
+  }
 };
 
 // ---------- dump ----------
@@ -124,13 +129,14 @@ if (mode === 'apply-updates') {
     if (u.desc !== undefined) lines.push(`    set description of ev to "${esc(u.desc)}"`);
     if (u.date) {
       const s = u.allday ? '00:00' : (u.time || '00:00');
-      lines.push(`    set start date of ev to my mkDate(${u.date.split('-').map(Number).join(', ')}, ${s.replace(':', ', ')})`);
       const end = u.endDate
         ? { d: u.endDate, t: u.endTime || '23:59' }
         : u.endTime ? { d: u.date, t: u.endTime }
         : u.allday ? { d: u.date, t: '23:55' }
         : null;
+      // End först — att flytta start framåt medan gammal end ligger kvar triggar "start must be before end"
       lines.push(`    set end date of ev to my mkDate(${end.d.split('-').map(Number).join(', ')}, ${end.t.replace(':', ', ')})`);
+      lines.push(`    set start date of ev to my mkDate(${u.date.split('-').map(Number).join(', ')}, ${s.replace(':', ', ')})`);
       if (u.allday) lines.push('    set allday event of ev to true');
     }
     lines.push('  else');
@@ -199,9 +205,8 @@ const mkEnd = (e) => {
   return `(${mkDate(e.date, e.time)} + 1 * hours)`;
 };
 
-const lines = [`set calName to "${esc(CAL)}"`, 'set numCreated to 0', 'set numSkipped to 0', 'tell application "Calendar"',
-  `  if not (exists calendar calName) then make new calendar with properties {name:calName}`,
-  `  set cal to calendar calName`];
+// Prologen innehåller redan set calName + tell + set cal — lägg inte till ett nytt tell-block
+const lines = [...prolog, 'set numCreated to 0', 'set numSkipped to 0'];
 for (const e of events) {
   if (!e.date || !e.title) { console.error('hoppar över (kräver date + title):', JSON.stringify(e)); continue; }
   const s = mkDate(e.date, e.allday ? '00:00' : e.time);
