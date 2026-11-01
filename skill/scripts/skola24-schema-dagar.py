@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
-"""Parsar Skola24:s schemavisar-text (innerText-slice) till strukturerade dagar.
-In: raw-JSON från skrapningen ({"weeks": {"v.37": "..."}}) eller rå textfil.
-Ut: JSON per vecka med dagar: datum, start, slut, lektioner (kurs+tid+sal+lärare), händelser, idrott-flagga.
+"""Parsar Skola24:s schemavisar-data till strukturerade dagar.
 
-Struktur i texten (empiriskt verifierad på v37–v40 2026-09-06):
-  [meta] dag-huvuden (Måndag 7/9 ...) → lektionsblock (3 rader: kod/lärare/sal; 2 rader om sal saknas)
-  → specialhändelser (rader "d/m, hh:mm-hh:mm Text" eller "d/m" följt av händelsetext)
-  → tidpar (rader "h:mm"), grupperade per dagkolumn i samma ordning.
-  Lektionsantal per dag == tidpar per dag. Daggräns i tidflödet = tidsminskning.
-Om lektionsantal != tidpar per dag: markera dagen "osäker" — hitta ALDRIG på fördelning.
+In: raw-JSON från skrapningen.
+  Primär källa (robust): "lessonInfo" — dict per vecka med {v.NN: {idx: {timeStart, timeEnd,
+  day (1-5), block, texts: [kod, lärare, sal, ...]}}} — dumpad ur Vue-VM
+  (NovaSoftware.Widgets.Base.applications[<guid>].timetable.lessonInfo).
+  Flat-texten ("weeks": {"v.NN": "..."}) används enbart för specialhändelser
+  (Studiedag/Gula dagar, "d/m, hh:mm-hh:mm Text") och publiceringstid.
+
+Ut: JSON per vecka med dagar: datum, start, slut, lektioner (kurs+tid+sal+lärare),
+händelser, idrott-flagga. Alla fem vardagar finns alltid med — även dagar utan
+celler (Studiedag/Gul dag).
+
+Fallback (om lessonInfo saknas): legacy flat-text-parse. Där hanteras
+(a) "Lunch"-rader som ett_tid_par_utan lektionsblock och
+(b) dagar utan tidpar (Studiedag) — tidsminskningsgrupperingen kan då inte skilja
+dagar, så flat-fallbacken antar lika cellfördelning endast när antal tidpar > 0
+per dag; annars "osäker". Hitta ALDRIG på fördelning.
+
+Empiriskt: lessonInfo-motorn kalibrerad på v45-v50 2026-11-01 (v45 med tom
+onsdag/Studiedag, v46-v50 med Lunch-celler).
 """
 import json
 import re
 import sys
+from datetime import datetime, timedelta
 
 KURSMAP = {
     "SVEN": "Svenska", "HIST": "Historia", "KORS": "Körsång", "MATE": "Matematik",
@@ -21,76 +33,153 @@ KURSMAP = {
     "RELI": "Religionskunskap", "GYAR": "Gymnasiearbete",
 }
 DAGAR = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"]
-KURSKOD = re.compile(r"^(Mentorstid|Föreläsning|[A-ZÅÄÖ]{3,4}\d[A-Z0-9X]*(?:\s+[a-z]\))?)$")
+KURSKOD = re.compile(r"^(Mentorstid|Föreläsning|Lunch|[A-ZÅÄÖ]{3,4}\d[A-Z0-9X]*(?:\s+[a-z]\))?)$")
 TIDTOKEN = re.compile(r"^\d{1,2}:\d{2}$")
 SPECIAL = re.compile(r"^(\d{1,2}/\d{1,2}),?\s*(\d{1,2}:\d{2}-\d{1,2}:\d{2})?\s*(.+)$")
 
 
 def kursnamn(kod):
     if kod in KURSMAP:
-        return KURSMAP[kod]
+        return KURSMAP.get(kod, kod)
     prefix = re.match(r"[A-ZÅÄÖ]{3,4}", kod)
     return KURSMAP.get(prefix.group(0), kod) if prefix else kod
 
 
-def parse_week(text):
+def vecka_dagar(vk):
+    """Måndagens ISO-datum för veckonummer, schemavisarårets kontext 2026 (avleds ur flat-text rader)."""
+    return None  # datum skrapas ur flat-textens daghuvuden istället
+
+
+def parse_events(text):
+    """Specialhändelser ur flat-texten: rader som börjar med d/m följda av lokala rader."""
     lines = [l.strip() for l in text.splitlines() if l.strip()]
-    # 1. Dag-huvuden
+    pub_idx = next((i for i, l in enumerate(lines) if l.startswith("Senast publicerad")), len(lines))
+    # händelsesektionen ligger mellan sista schemacellen och tidtokens/publicerad
+    # robust höjd: hitta "Studiedag"-typiska rader direkt — rader efter sista lektionsblocket
+    tid_idx = [i for i, l in enumerate(lines) if TIDTOKEN.match(l)]
+    ev_rader = []
+    if tid_idx:
+        # tidtokens kommer i block efter händelser; händelser between last lektionsblock and first tid-block
+        last_kod = max((i for i, l in enumerate(lines[:pub_idx]) if KURSKOD.match(l)), default=None)
+        if last_kod is not None:
+            ev_rader = lines[last_kod + 1:tid_idx[-1]]
+    händelser = {}
+    i = 0
+    while i < len(ev_rader):
+        m = SPECIAL.match(ev_rader[i])
+        if m and re.match(r"^\d{1,2}/\d{1,2},?$", ev_rader[i].split(",")[0].split(" ")[0] + ("," if ev_rader[i].split(",")[0].endswith(",") else "")):
+            datum = ev_rader[i].split(",")[0].split(" ")[0].rstrip(",")
+            rest = ev_rader[i]
+            tider = re.search(r"(\d{1,2}:\d{2})-(\d{1,2}:\d{2})", rest)
+            namn = re.sub(r"^\d{1,2}/\d{1,2},?\s*", "", rest)
+            if tider:
+                namn = re.sub(r"\d{1,2}:\d{2}-\d{1,2}:\d{2}\s*", "", namn)
+            bara_datum = not namn.strip()
+            if bara_datum and i + 1 < len(ev_rader):
+                namn = ev_rader[i + 1].strip()
+                i += 2  # (datum-)+tidsrad + namn-rad konsumerade
+                händelser.setdefault(datum, []).append({"namn": namn, "start": tider.group(1) if tider else None, "slut": tider.group(2) if tider else None})
+                continue
+            händelser.setdefault(datum, []).append({
+                "namn": namn.strip() or (ev_rader[i + 1].strip() if i + 1 < len(ev_rader) else ""),
+                "start": tider.group(1) if tider else None,
+                "slut": tider.group(2) if tider else None,
+            })
+            i += 1
+            while i < len(ev_rader) and not SPECIAL.match(ev_rader[i]):
+                namn2 = ev_rader[i].strip()
+                if not re.match(r"^\d{1,2}/\d{1,2}$", namn2):
+                    händelser[datum].append({"namn": namn2, "start": None, "slut": None})
+                i += 1
+        else:
+            i += 1
+    return händelser
+
+
+def hhmm(t):
+    """'11:20:00' -> '11:20'"""
+    return (t or "")[:5]
+
+
+def parse_week_lessons(lessons, text):
+    """lessonInfo-motor: bygger alla 5 dagar direkt ur VM-data."""
+    if not isinstance(lessons, dict) or not lessons:
+        return {"fel": "lessonInfo tom/saknad"}
+    if not text:
+        return {"fel": "flat-text saknad (behövs för daghuvud-datum)"}
+
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    dag_idx = [(m.group(1), m.group(2)) for l in lines
+               if (m := re.match(rf"^({'|'.join(DAGAR)}) (\d{{1,2}}/\d{{1,2}})$", l))]
+    if len(dag_idx) < 5:
+        return {"fel": f"färre än 5 daghuvuden i flat-text: {len(dag_idx)}"}
+
+    händelser = parse_events(text)
+
+    # gruppera lektioner per dag (1=måndag)
+    celler = {}
+    for L in lessons.values():
+        if L is None:
+            continue
+        dag = int(L.get("day") or 0)
+        if dag < 1 or dag > 5:
+            continue
+        texts = [t for t in (L.get("texts") or []) if t]
+        kod = texts[0] if texts else (L.get("blockName") or "Okänd")
+        lärare = texts[1] if len(texts) > 1 else ""
+        sal = texts[2] if len(texts) > 2 else ""
+        celler.setdefault(dag, []).append({
+            "kod": kod, "kurs": kursnamn(kod), "lärare": lärare, "sal": sal or None,
+            "start": hhmm(L.get("timeStart")), "slut": hhmm(L.get("timeEnd")),
+        })
+
+    publicerad = next((l for l in lines if l.startswith("Senast publicerad")), None)
+    ut = {"dagar": [], "motor": "lessonInfo"}
+    for i, (dag, datum) in enumerate(dag_idx[:5], start=1):
+        d_lek = sorted(celler.get(i, []), key=lambda c: c["start"])
+        ut["dagar"].append({
+            "dag": dag, "datum": datum,
+            "start": d_lek[0]["start"] if d_lek else None,
+            "slut": d_lek[-1]["slut"] if d_lek else None,
+            "lektioner": d_lek,
+            "idrott": any("IDRO" in c["kod"] for c in d_lek),
+            "händelser": händelser.get(datum, []),
+        })
+    return ut
+
+
+def parse_week_legacy(text):
+    """Legacy flat-text-parser med Lunch- och tom-dag-tolerans."""
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
     dag_idx = [(i, m.group(1), m.group(2)) for i, l in enumerate(lines)
                if (m := re.match(rf"^({'|'.join(DAGAR)}) (\d{{1,2}}/\d{{1,2}})$", l))]
     if len(dag_idx) < 5:
         return {"fel": f"färre än 5 daghuvuden: {len(dag_idx)}"}
-    start = dag_idx[0][0] + 5  # efter Fredag-datumet
-    dagar = [{"dag": d[1], "datum": d[2]} for d in dag_idx[:5]]
 
-    # 2. Tidtokens: lektionstider kommer EFTER sista lektionskoden (timgitter-etiketterna
-    #    9:00–16:00 före daghuvudena ska inte med). Hitta lektionskoder först.
-    pub_idx = next((i for i, l in enumerate(lines) if l.startswith("Senast publicerad")), len(lines))
+    händelser = parse_events(text)
     kod_idx = [i for i, l in enumerate(lines) if KURSKOD.match(l)]
     if not kod_idx:
         return {"fel": "inga lektionskoder"}
+    pub_idx = next((i for i, l in enumerate(lines) if l.startswith("Senast publicerad")), len(lines))
     cutoff = kod_idx[-1]
     tid_rader = [(i, l) for i, l in enumerate(lines[:pub_idx]) if TIDTOKEN.match(l) and i > cutoff]
     if not tid_rader:
         return {"fel": "inga tidtokens efter lektionerna"}
     tid_start = tid_rader[0][0]
 
-    # 3. Specialhändelser = rader mellan lektioner och tidtokens som börjar med d/m
-    #    (mittsektionen kan innehålla timgitter-etiketter före lektionerna — de raderas i steg 4:s KURSKOD-koll)
-    mitt = lines[start:tid_start]
+    mitt = lines[dag_idx[0][0]:tid_start]
     ev_split = next((i for i, l in enumerate(mitt) if re.match(r"^\d{1,2}/\d{1,2}", l)), len(mitt))
-    lektions_rader = mitt[:ev_split]
-    händelse_rader = mitt[ev_split:]
-    # rensa bort ev. timgitter-etiketter (h:mm) från lektionsraderna — de är inte lektionskoder
-    lektions_rader = [l for l in lektions_rader if not TIDTOKEN.match(l)]
+    lektions_rader = [l for l in mitt[:ev_split] if not TIDTOKEN.match(l)]
 
-    händelser = {}
-    i = 0
-    while i < len(händelse_rader):
-        m = SPECIAL.match(händelse_rader[i])
-        if m and re.match(r"^\d{1,2}/\d{1,2}$", händelse_rader[i].split(",")[0].split(" ")[0]):
-            datum = händelse_rader[i].split(",")[0].split(" ")[0]
-            rest = händelse_rader[i]
-            tider = re.search(r"(\d{1,2}:\d{2})-(\d{1,2}:\d{2})", rest)
-            namn = re.sub(r"^\d{1,2}/\d{1,2},?\s*", "", rest)
-            if tider:
-                namn = re.sub(r"\d{1,2}:\d{2}-\d{1,2}:\d{2}\s*", "", namn)
-            händelser.setdefault(datum, []).append({"namn": namn.strip(), "start": tider.group(1) if tider else None, "slut": tider.group(2) if tider else None})
-            # nästa rad kan vara händelse utan datum-prefix (t.ex. "Studiedag" efter "10/9")
-            i += 1
-            while i < len(händelse_rader) and not SPECIAL.match(händelse_rader[i]):
-                namn2 = händelse_rader[i].strip()
-                if not re.match(r"^\d{1,2}/\d{1,2}$", namn2):  # hoppa över rader som bara är ett datum
-                    händelser[datum].append({"namn": namn2, "start": None, "slut": None})
-                i += 1
-        else:
-            i += 1
-
-    # 4. Lektionsblock: 3 rader (kod, lärare, sal) — tolerera 2 (saknas sal)
+    # lektionsblock: Lunch är en-radigt; övriga 3 rader (kod/lärare/sal) — tolerera 2
     lektioner = []
     i = 0
     while i < len(lektions_rader):
         rad = lektions_rader[i]
+        if rad == "Lunch":
+            lektioner.append({"kod": "Lunch", "kurs": "Lunch", "lärare": "", "sal": None})
+            i += 1
+            continue
         if KURSKOD.match(rad):
             lärare = lektions_rader[i + 1] if i + 1 < len(lektions_rader) else ""
             sal = lektions_rader[i + 2] if i + 2 < len(lektions_rader) else None
@@ -101,9 +190,8 @@ def parse_week(text):
             lektioner.append({"kod": rad, "kurs": kursnamn(rad), "lärare": lärare, "sal": sal})
             i += steg
         else:
-            i += 1  # skräprader hoppas över
+            i += 1
 
-    # 5. Tidpar per dagkolumn via tidsminskning (jämför i minuter, ej sträng)
     def minuter(t):
         h, m = t.split(":")
         return int(h) * 60 + int(m)
@@ -115,30 +203,27 @@ def parse_week(text):
         if grupper[-1] and minuter(p[0]) < minuter(grupper[-1][-1][1]):
             grupper.append([])
         grupper[-1].append(p)
-    if len(grupper) != 5:
-        return {"fel": f"tidgrupper ({len(grupper)}) != 5 dagar", "par": par}
-
-    # 6. Lektioner fördelas på dagar enligt gruppstorlekarna (samma ordning)
-    storlekar = [len(g) for g in grupper]
-    if sum(storlekar) != len(lektioner):
-        return {"fel": f"lektionsantal {len(lektioner)} != tidpar {sum(storlekar)}", "storlekar": storlekar}
-
-    ut = {"dagar": [], "publicerad": lines[pub_idx] if pub_idx < len(lines) else None}
-    pos = 0
-    for di, (dag, g) in enumerate(zip(dagar, grupper)):
-        dag_lek = []
-        for p in g:
-            lek = lektioner[pos].copy()
-            lek["start"], lek["slut"] = p
-            dag_lek.append(lek)
-            pos += 1
-        dag["lektioner"] = dag_lek
-        dag["start"] = g[0][0]
-        dag["slut"] = g[-1][1]
-        dag["idrott"] = any("IDRO" in l["kod"] for l in dag_lek)
-        dag["händelser"] = händelser.get(dag["datum"], [])
-        ut["dagar"].append(dag)
-    return ut
+    om_grupper = len(grupper)
+    if om_grupper == 5 and sum(len(g) for g in grupper) == len(lektioner):
+        ut = {"dagar": [], "motor": "flat-text"}
+        pos = 0
+        for dag, g in zip(dag_idx[:5], grupper):
+            dag_lek = []
+            for p in g:
+                lek = lektioner[pos].copy()
+                lek["start"], lek["slut"] = p
+                dag_lek.append(lek)
+                pos += 1
+            ut["dagar"].append({
+                "dag": dag[1], "datum": dag[2],
+                "start": g[0][0] if g else None, "slut": g[-1][1] if g else None,
+                "lektioner": dag_lek,
+                "idrott": any("IDRO" in l["kod"] for l in dag_lek),
+                "händelser": händelser.get(dag[2], []),
+            })
+        return ut
+    # osäker flat-distribution — trappa upp (hitta ALDRIG på fördelning)
+    return {"fel": f"osäker flat-fördelning (grupper {om_grupper}, lektioner {len(lektioner)}, tidpar {len(par)})"}
 
 
 def main():
@@ -146,13 +231,19 @@ def main():
     if src.endswith(".json"):
         data = json.load(open(src))
         weeks = data.get("weeks", data)
+        lessons_all = data.get("lessonInfo") or {}
         ut = {}
         for k, v in weeks.items():
             if isinstance(v, str):
-                ut[k] = parse_week(v)
+                if k in lessons_all and lessons_all[k]:
+                    ut[k] = parse_week_lessons(lessons_all[k], v)
+                    if "fel" in ut[k]:
+                        ut[k]["flat_fallback"] = parse_week_legacy(v)
+                else:
+                    ut[k] = parse_week_legacy(v)
         print(json.dumps(ut, ensure_ascii=False, indent=2))
     else:
-        print(json.dumps(parse_week(open(src).read()), ensure_ascii=False, indent=2))
+        print(json.dumps(parse_week_legacy(open(src).read()), ensure_ascii=False, indent=2))
 
 
 main()
