@@ -6,3 +6,4 @@ rapporter/
 data/*
 !data/.gitkeep
 .DS_Store
+skill/scripts/__pycache__/
